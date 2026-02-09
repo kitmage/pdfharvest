@@ -12,7 +12,7 @@ ENV_OPENROUTER_TITLE: Final[str] = "OPENROUTER_TITLE"
 ENV_PDFHARVEST_STORAGE_DIR: Final[str] = "PDFHARVEST_STORAGE_DIR"
 
 # Defaults
-DEFAULT_OPENROUTER_MODEL: Final[str] = "openai/gpt-4o-mini"
+DEFAULT_OPENROUTER_MODEL: Final[str] = "google/gemini-2.5-flash"
 DEFAULT_OPENROUTER_TITLE: Final[str] = "pdfharvest"
 OPENROUTER_BASE_URL: Final[str] = "https://openrouter.ai/api/v1"
 
