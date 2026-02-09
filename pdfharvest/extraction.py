@@ -125,19 +125,46 @@ def _iter_page_text(
 ) -> Iterator[tuple[int, str]]:
     """
     Yield (one_based_page_number, page_text) for each page in range.
-    Uses OCR when native text is empty.
+    
+    Handles both vector (text-based) and raster (image-based) pages:
+    - Vector pages: Extract native text directly
+    - Raster pages: Use OCR to extract text from rendered images
+    - Mixed pages: Prefer vector text, fall back to OCR if vector is empty
     """
     total = len(reader.pages)
     start = page_offset
     end = total if limit_pages is None else min(start + limit_pages, total)
     for idx in range(start, end):
         one_based = idx + 1
-        page_text = extract_text_from_page(reader, idx)
-        if not page_text:
-            page_text = ocr_page(pdf_path, one_based, temp_dir)
+        # Try vector text extraction first (fast, accurate for text-based PDFs)
+        vector_text = extract_text_from_page(reader, idx)
+        
+        # Always try OCR for raster pages, and also for pages with minimal vector text
+        # (vector extraction might miss content in complex layouts or scanned pages)
+        ocr_text = ocr_page(pdf_path, one_based, temp_dir)
+        
+        # Combine both sources: prefer vector if substantial, otherwise use OCR
+        # If both exist, combine them (vector might have structure, OCR might have more content)
+        if vector_text and len(vector_text) > 50:
+            # Vector text is substantial - use it, but append OCR if it adds content
+            if ocr_text and len(ocr_text) > len(vector_text) * 1.5:
+                # OCR found significantly more - use OCR as primary
+                page_text = ocr_text
+            else:
+                page_text = vector_text
+        elif ocr_text:
+            # OCR found content - use it
+            page_text = ocr_text
+        elif vector_text:
+            # Only vector text (even if short) - use it
+            page_text = vector_text
+        else:
+            # Both empty - still yield with empty text so LLM can note the page exists
+            page_text = ""
+        
         page_text = (page_text or "").strip()
-        if page_text:
-            yield one_based, page_text
+        # Yield all pages, even if empty (LLM can handle empty pages)
+        yield one_based, page_text
 
 
 def run_extraction(
@@ -196,9 +223,14 @@ def run_extraction(
                     f"Extracting page {processed}/{effective_total}",
                 )
             include_header = "yes" if header is None else "no"
+            # If page appears empty, give LLM context about it
+            if not page_text:
+                context = f"[Page {one_based}]\n[This page appears to be empty or contains only images/graphics with no extractable text.]"
+            else:
+                context = f"[Page {one_based}]\n{page_text}"
             messages = prompt.format_messages(
                 question=user_prompt,
-                context=f"[Page {one_based}]\n{page_text}",
+                context=context,
                 include_header=include_header,
                 output_format=output_format,
             )
