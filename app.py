@@ -153,10 +153,13 @@ if "result" in st.session_state:
     st.caption(
         f"Pages scanned: {result['extracted_pages']} of {result['effective_total']}"
     )
-    # First row as header, rest as data
+    # First row as header, rest as data; normalize column count (LLM may return uneven rows)
     rows = result["rows"]
     if rows:
-        df = pd.DataFrame(rows[1:], columns=rows[0])
+        max_cols = max(len(r) for r in rows)
+        header = list(rows[0]) + [f"col_{i}" for i in range(len(rows[0]), max_cols)]
+        data = [(row + [""] * max_cols)[:max_cols] for row in rows[1:]]
+        df = pd.DataFrame(data, columns=header)
         st.dataframe(df, use_container_width=True)
     file_ext = (
         "csv"
